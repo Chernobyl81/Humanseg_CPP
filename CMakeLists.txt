@@ -9,7 +9,12 @@ set(SOVERSION_STRING 0.1.0)
 include(CTest)
 enable_testing()
 
+find_package(OpenCV REQUIRED)
+#set(TOOLKIT_ROOT_DIR ${CMAKE_SOURCE_DIR})
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/onnxruntime)
+
 add_executable(PP_HumanSeg_CPP main.cpp)
+target_link_libraries(${PROJECT_NAME} onnxruntime ${OpenCV_LIBS})
 
 set(CPACK_PROJECT_NAME ${PROJECT_NAME})
 set(CPACK_PROJECT_VERSION ${PROJECT_VERSION})
