@@ -1,5 +1,15 @@
 #include <iostream>
+#include "onnx/cv/human_segmentation.h"
+#include "Eigen/Core"
 
-int main(int, char**) {
-    std::cout << "Hello, world!\n";
+using Eigen::MatrixXd;
+
+int main(int, char **)
+{
+    MatrixXd m(2, 2);
+    m(0, 0) = 3;
+    m(1, 0) = 2.5;
+    m(0, 1) = -1;
+    m(1, 1) = m(1, 0) + m(0, 1);
+    std::cout << m << std::endl;
 }
