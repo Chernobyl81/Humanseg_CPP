@@ -2,25 +2,40 @@
 #define HUMAN_SEGMENTATION_H
 
 #include <memory>
+#include <chrono>
 #include "onnxruntime_cxx_api.h"
+#include "Eigen/Core"
+#include "Eigen/Dense"
+#include "opencv2/opencv.hpp"
+#include "opencv2/core/eigen.hpp"
 
-namespace onnx::cv
+
+using namespace cv;
+
+namespace onnx
 {
-    class HumanSegmentaion
+    namespace hs
     {
-    private:
-        Ort::Env _ort_env;
-        Ort::AllocatorWithDefaultOptions _allocator;
-        Ort::MemoryInfo _memory_info_handler;
+        class HumanSegmentaion
+        {
+        private:
+            Ort::Env _ort_env;
+            Ort::AllocatorWithDefaultOptions _allocator;
+            Ort::MemoryInfo _memory_info_handler;
+            std::unique_ptr<Ort::Session> _ort_session;
+            size_t _num_threads;
+           
+            Ort::SessionOptions initSessionOptions();
+            void normalize(const Mat &img, Eigen::Tensor<float, 3, Eigen::RowMajor> &tensor);
+            Eigen::Tensor<float, 4, Eigen::RowMajor> preprocess(cv::Mat &img);
 
-        std::unique_ptr<Ort::Session> _ort_session;
+        public:
+            HumanSegmentaion(const char *model_path, size_t num_threads = 2);
+            ~HumanSegmentaion() = default;
 
-
-    public:
-        HumanSegmentaion(const char* model_path, Ort::Env env);
-        ~HumanSegmentaion();
-    };
-        
+            void detect(Mat& image);
+        };
+    }
 }
 
 #endif

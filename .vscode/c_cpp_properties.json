@@ -3,8 +3,9 @@
         {
             "name": "Linux",
             "includePath": [
+                "${default}",
                 "${workspaceFolder}/**",
-                "${workspaceFolder}/onnxruntime"
+                "${workspaceFolder}"
             ],
             "defines": [],
             "compilerPath": "/usr/bin/clang",
