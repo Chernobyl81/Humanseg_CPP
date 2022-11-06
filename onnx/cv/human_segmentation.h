@@ -11,10 +11,14 @@
 
 using namespace cv;
 
+
 namespace onnx
 {
     namespace hs
     {
+        typedef Eigen::Tensor<float, 3, Eigen::RowMajor> Tensor3d;
+        typedef Eigen::Tensor<float, 4, Eigen::RowMajor> Tensor4d;
+
         class HumanSegmentaion
         {
         private:
@@ -37,13 +41,13 @@ namespace onnx
             static const size_t OUTPUT_TENSOR_SIZE = WIDTH * HEIGHT * 2;
 
             Ort::SessionOptions initSessionOptions();
-            Eigen::Tensor<float, 4, Eigen::RowMajor> preprocess(cv::Mat &img);
+            Tensor4d preprocess(cv::Mat &img);
 
-            void normalize(Mat &img, Eigen::Tensor<float, 3, Eigen::RowMajor> &tensor);
+            void normalize(Mat &img, Tensor3d &tensor);
 
             void postprocess(std::array<float, OUTPUT_TENSOR_SIZE> &output,
                              cv::Mat &origin_mat,
-                             Eigen::Tensor<float, 3, Eigen::RowMajor> &bg_tensor,
+                             Tensor3d &bg_tensor,
                              cv::Mat &matted
                              );
 
@@ -51,8 +55,8 @@ namespace onnx
             HumanSegmentaion(const char *model_path, int num_threads = 2);
             ~HumanSegmentaion() = default;
 
-            void detect(Mat &image, Eigen::Tensor<float, 3, Eigen::RowMajor> &, Mat&);
-            static Eigen::Tensor<float, 3, Eigen::RowMajor> GenerateBg(Mat &bg, Size &size);
+            void detect(Mat &image, Tensor3d &, Mat&);
+            static Tensor3d GenerateBg(Mat &bg, Size &size);
         };
     }
 }
