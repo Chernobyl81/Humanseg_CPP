@@ -64,7 +64,6 @@ void HumanSegmentaion::detect(Mat &frame, Tensor3d &bg_tensor, Mat &matted)
     std::cout << "Inference time: " << dr_s << "ms" << std::endl;
 
     this->postprocess(output, origin_mat, bg_tensor, matted);
-    // cv::imwrite("/home/david/Desktop/rrrrrr.jpeg" ,this->postprocess(output, origin_mat, bg_tensor));
 }
 
 void HumanSegmentaion::postprocess(std::array<float, OUTPUT_TENSOR_SIZE> &output,
@@ -85,7 +84,7 @@ void HumanSegmentaion::postprocess(std::array<float, OUTPUT_TENSOR_SIZE> &output
     Eigen::TensorMap<Tensor3d> score_tensor{scroe_map.data(), 1, 224, 398};
 
     // Transpose
-    Eigen::array<int, 3> shuffling({1, 2, 0});
+    Shape3d shuffling({1, 2, 0});
     Tensor3d scrore_transposed = score_tensor.shuffle(shuffling);
 
     Mat tmp;
@@ -95,7 +94,7 @@ void HumanSegmentaion::postprocess(std::array<float, OUTPUT_TENSOR_SIZE> &output
     Tensor3d alpha(size.height, size.width, 1);
     cv::cv2eigen(tmp, alpha);
 
-    Eigen::array<int, 3> bcast = {1, 1, 3};
+    Shape3d bcast = {1, 1, 3};
     Tensor3d ab = alpha.broadcast(bcast);
 
     Tensor3d comb = ab * origin_tensor + (1 - ab) * bg_tensor;
@@ -110,7 +109,7 @@ void HumanSegmentaion::postprocess(std::array<float, OUTPUT_TENSOR_SIZE> &output
     std::cout << "Postprocess time: " << dr_s << "ms" << std::endl;
 }
 
-void HumanSegmentaion::normalize(cv::Mat &img, Eigen::Tensor<float, 3, Eigen::RowMajor> &tensor)
+void HumanSegmentaion::normalize(cv::Mat &img, Tensor3d &tensor)
 {
     cv::cv2eigen(img, tensor);
     tensor = tensor / 255.0f;
@@ -129,7 +128,7 @@ Tensor4d HumanSegmentaion::preprocess(cv::Mat &img)
     this->normalize(img, imageTensor);
 
     // Tanspose
-    Eigen::array<int, 3> shuffling({2, 0, 1});
+    Shape3d shuffling({2, 0, 1});
     Tensor3d transposed = imageTensor.shuffle(shuffling);
 
     // Add a dimension

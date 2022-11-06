@@ -18,6 +18,7 @@ namespace onnx
     {
         typedef Eigen::Tensor<float, 3, Eigen::RowMajor> Tensor3d;
         typedef Eigen::Tensor<float, 4, Eigen::RowMajor> Tensor4d;
+        typedef Eigen::array<int, 3> Shape3d;
 
         class HumanSegmentaion
         {
