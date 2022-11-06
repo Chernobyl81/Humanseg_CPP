@@ -47,7 +47,7 @@ int matting(char **argv)
         
         auto end = std::chrono::steady_clock::now();
         double dr_s = std::chrono::duration<double, std::milli>(end - start).count();
-        std::cout << "Total time usage: " << dr_s << "ms <<<<<<<<" << std::endl;
+        std::cout << "Total time usage: " << dr_s << "ms \n<<<<<<<<" << std::endl;
 
         imshow(window_name, output);
 

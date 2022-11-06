@@ -28,16 +28,14 @@ Ort::SessionOptions HumanSegmentaion::initSessionOptions()
     return session_options;
 }
 
-void HumanSegmentaion::detect(Mat &frame, Tensor3f &bgTensor, Mat &matted)
+void HumanSegmentaion::detect(Mat &frame, const Tensor3f &bgTensor, Mat &matted)
 {
     auto start = std::chrono::steady_clock::now();
     auto origin_shape = frame.size();
     auto origin_mat = frame.clone();
 
-    Tensor4f preprocessed = this->preprocess(frame);
+    auto preprocessed = this->preprocess(frame);
     float *inputData = preprocessed.data();
-
-    std::array<float, OUTPUT_TENSOR_SIZE> output{};
 
     Ort::Value input_tensor = Ort::Value::CreateTensor<float>(
         m_memoryInfo,
@@ -46,7 +44,8 @@ void HumanSegmentaion::detect(Mat &frame, Tensor3f &bgTensor, Mat &matted)
         MODEL_INPUT_SHAPE.data(),
         MODEL_INPUT_SHAPE.size());
 
-    Ort::Value output_tensor = Ort::Value::CreateTensor<float>(
+    std::array<float, OUTPUT_TENSOR_SIZE> output{};
+    Ort::Value outputTensor = Ort::Value::CreateTensor<float>(
         m_memoryInfo,
         output.data(),
         OUTPUT_TENSOR_SIZE,
@@ -55,7 +54,7 @@ void HumanSegmentaion::detect(Mat &frame, Tensor3f &bgTensor, Mat &matted)
 
     auto end = std::chrono::steady_clock::now();
     double dr_s = std::chrono::duration<double, std::milli>(end - start).count();
-    std::cout << "Create Tensor time: " << dr_s << "ms" << std::endl;
+    std::cout << ">>>>>> \nCreate Tensor uses: " << dr_s << "ms" << std::endl;
     start = std::chrono::steady_clock::now();
 
     m_ortSession->Run(
@@ -64,7 +63,7 @@ void HumanSegmentaion::detect(Mat &frame, Tensor3f &bgTensor, Mat &matted)
         &input_tensor,
         1,
         &MODEL_OUTPUT_NAMES,
-        &output_tensor,
+        &outputTensor,
         1);
 
     end = std::chrono::steady_clock::now();
@@ -74,9 +73,9 @@ void HumanSegmentaion::detect(Mat &frame, Tensor3f &bgTensor, Mat &matted)
     this->postprocess(output, origin_mat, bgTensor, matted);
 }
 
-void HumanSegmentaion::postprocess(std::array<float, OUTPUT_TENSOR_SIZE> &output,
-                                   cv::Mat &originMat,
-                                   Tensor3f &bg_tensor,
+void HumanSegmentaion::postprocess(const std::array<float, OUTPUT_TENSOR_SIZE> &output,
+                                   const cv::Mat &originMat,
+                                   const Tensor3f &bgTensor,
                                    cv::Mat &matted)
 {
     auto start = std::chrono::steady_clock::now();
@@ -92,7 +91,7 @@ void HumanSegmentaion::postprocess(std::array<float, OUTPUT_TENSOR_SIZE> &output
     Eigen::TensorMap<Tensor3f> score_tensor{scroe_map.data(), 1, 224, 398};
 
     // Transpose
-    Shape3i shuffling({1, 2, 0});
+    const Shape3i shuffling({1, 2, 0});
     Tensor3f scrore_transposed = score_tensor.shuffle(shuffling);
 
     Mat tmp;
@@ -105,19 +104,17 @@ void HumanSegmentaion::postprocess(std::array<float, OUTPUT_TENSOR_SIZE> &output
     Shape3i bcast = {1, 1, 3};
     Tensor3f ab = alpha.broadcast(bcast);
 
-    Tensor3f comb = ab * origin_tensor + (1 - ab) * bg_tensor;
+    Tensor3f comb = ab * origin_tensor + (1 - ab) * bgTensor;
     Eigen::Tensor<cv::uint8_t, 3, Eigen::RowMajor> results = comb.cast<cv::uint8_t>();
 
-    // Mat r_mat;
     cv::eigen2cv(results, matted);
-    std::cout << "Matted channels: " << matted.channels() << " depth " << matted.depth() << std::endl;
 
     auto end = std::chrono::steady_clock::now();
     double dr_s = std::chrono::duration<double, std::milli>(end - start).count();
     std::cout << "Postprocess time: " << dr_s << "ms" << std::endl;
 }
 
-void HumanSegmentaion::normalize(cv::Mat &img, Tensor3f &tensor)
+void HumanSegmentaion::normalize(cv::Mat &img, Tensor3f &tensor) const
 {
     cv::cv2eigen(img, tensor);
     tensor = tensor / 255.0f;
@@ -125,7 +122,7 @@ void HumanSegmentaion::normalize(cv::Mat &img, Tensor3f &tensor)
     tensor = tensor / 0.5f;
 }
 
-Tensor4f HumanSegmentaion::preprocess(cv::Mat &frame)
+const Tensor4f HumanSegmentaion::preprocess(cv::Mat &frame)
 {
     auto start = std::chrono::steady_clock::now();
 
@@ -149,28 +146,10 @@ Tensor4f HumanSegmentaion::preprocess(cv::Mat &frame)
     return reshaped;
 }
 
-Tensor3f HumanSegmentaion::GenerateBg(cv::Mat &bg, cv::Size &size)
+const Tensor3f HumanSegmentaion::GenerateBg(cv::Mat &bg, const cv::Size &size)
 {
     cv::resize(bg, bg, size);
     static Tensor3f bg_tensor(size.height, size.width, 3);
     cv::cv2eigen(bg, bg_tensor);
     return bg_tensor;
 }
-
-// std::cout << "Result shape("
-//           << result.dimension(0)
-//           << "x" << result.dimension(1)
-//           << "x" << result.dimension(2)
-//           << "x" << result.dimension(3)
-//           << ")" << std::endl;
-// std::cout << result(0, 0, 0, 191) << std::endl;
-// std::cout << result.size() << std::endl;
-
-// auto input_name = _ort_session->GetInputNameAllocated(0, _allocator);
-// std::cout << _ort_session->GetInputCount() << "," << input_name.get() << std::endl;
-// auto output_name = _ort_session->GetOutputNameAllocated(0, _allocator);
-// std::cout << _ort_session->GetOutputCount() << "," << output_name.get() << std::endl;
-
-// auto k = _ort_session->GetOutputTypeInfo(0);
-// auto d = k.GetTensorTypeAndShapeInfo();
-// std::cout << d.GetShape().size() << std::endl;
