@@ -16,48 +16,48 @@ namespace onnx
 {
     namespace hs
     {
-        typedef Eigen::Tensor<float, 3, Eigen::RowMajor> Tensor3d;
-        typedef Eigen::Tensor<float, 4, Eigen::RowMajor> Tensor4d;
-        typedef Eigen::array<int, 3> Shape3d;
+        typedef Eigen::Tensor<float, 3, Eigen::RowMajor> Tensor3f;
+        typedef Eigen::Tensor<float, 4, Eigen::RowMajor> Tensor4f;
+        typedef Eigen::array<int, 3> Shape3i;
+        typedef std::array<int64_t, 4> ModelShape;
 
         class HumanSegmentaion
         {
         private:
-            Ort::Env _ort_env;
-            Ort::AllocatorWithDefaultOptions _allocator;
-            Ort::MemoryInfo _memory_info;
-            std::unique_ptr<Ort::Session> _ort_session;
-            size_t _num_threads;
+            Ort::Env m_ortEnv;
+            Ort::AllocatorWithDefaultOptions m_allocator;
+            Ort::MemoryInfo m_memoryInfo;
+            size_t m_numThreads;
+            std::unique_ptr<Ort::Session> m_ortSession;
             
-            std::array<int64_t, 4> _inputShape{1, 3, 224, 398};
-            std::array<int64_t, 4> _outputShape{1, 2, 224, 398};
+            const ModelShape MODEL_INPUT_SHAPE  {1, 3, HEIGHT, WIDTH};
+            const ModelShape MODEL_OUTPUT_SHAPE {1, 2, HEIGHT, WIDTH};
 
-            const char *input_names = {"x"};
-            const char *output_names = {"save_infer_model/scale_0.tmp_1"};
+            const char *MODEL_INPUT_NAMES =  {"x"};
+            const char *MODEL_OUTPUT_NAMES = {"save_infer_model/scale_0.tmp_1"};
 
             static const int WIDTH = 398;
             static const int HEIGHT = 224;
-            static const int SHAPE = 224 * 398;
-            static const size_t INPUT_TENSOR_SIZE = WIDTH * HEIGHT * 3;
-            static const size_t OUTPUT_TENSOR_SIZE = WIDTH * HEIGHT * 2;
+            static constexpr int SHAPE = WIDTH * HEIGHT;
+            static constexpr size_t INPUT_TENSOR_SIZE  = SHAPE * 3;
+            static constexpr size_t OUTPUT_TENSOR_SIZE = SHAPE * 2;
 
             Ort::SessionOptions initSessionOptions();
-            Tensor4d preprocess(cv::Mat &img);
+            Tensor4f preprocess(cv::Mat &frame);
 
-            void normalize(Mat &img, Tensor3d &tensor);
+            void normalize(Mat &frame, Tensor3f &output);
 
-            void postprocess(std::array<float, OUTPUT_TENSOR_SIZE> &output,
-                             cv::Mat &origin_mat,
-                             Tensor3d &bg_tensor,
-                             cv::Mat &matted
-                             );
+            void postprocess(std::array<float, OUTPUT_TENSOR_SIZE> &modelOutputs,
+                             cv::Mat &originFrame,
+                             Tensor3f &bgTensor,
+                             cv::Mat &matted);
 
         public:
-            HumanSegmentaion(const char *model_path, int num_threads = 2);
+            explicit HumanSegmentaion(const char *modelPath, int numThreads = 2);
             ~HumanSegmentaion() = default;
 
-            void detect(Mat &image, Tensor3d &, Mat&);
-            static Tensor3d GenerateBg(Mat &bg, Size &size);
+            void detect(Mat &frame, Tensor3f &bgTensor, Mat &matted);
+            static Tensor3f GenerateBg(Mat &bg, Size &frameSize);
         };
     }
 }
