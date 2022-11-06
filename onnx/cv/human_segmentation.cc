@@ -3,7 +3,7 @@
 using namespace onnx::hs;
 
 HumanSegmentaion::HumanSegmentaion(const char *model_path,
-                                   size_t num_threads)
+                                   int num_threads)
     : _ort_env(Ort::Env(ORT_LOGGING_LEVEL_ERROR, model_path)),
       _memory_info(Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault)),
       _ort_session(std::make_unique<Ort::Session>(_ort_env, model_path, initSessionOptions())),
@@ -25,12 +25,13 @@ Ort::SessionOptions HumanSegmentaion::initSessionOptions()
 }
 
 
-void HumanSegmentaion::detect(Mat &image, Eigen::Tensor<float, 3, Eigen::RowMajor>& bg_tensor)
+void HumanSegmentaion::detect(Mat &frame, Eigen::Tensor<float, 3, Eigen::RowMajor>& bg_tensor, Mat& matted)
 {
-    auto origin_shape = image.size();
-    auto origin_mat = image.clone();
+    auto origin_shape = frame.size();
+    std::cout << "input width: " << origin_shape.width << " input height: " << origin_shape.height << std::endl;
+    auto origin_mat = frame.clone();
 
-    Eigen::Tensor<float, 4, Eigen::RowMajor> preprocessed = this->preprocess(image);
+    Eigen::Tensor<float, 4, Eigen::RowMajor> preprocessed = this->preprocess(frame);
     float *inputData = preprocessed.data();
 
     std::array<float, OUTPUT_TENSOR_SIZE> output{};
@@ -64,12 +65,14 @@ void HumanSegmentaion::detect(Mat &image, Eigen::Tensor<float, 3, Eigen::RowMajo
     double dr_s = std::chrono::duration<double, std::milli>(end - start).count();
     std::cout << "Inference time: " << dr_s << "ms" << std::endl;
 
-    cv::imwrite("/home/david/Desktop/rrrrrr.jpeg" ,this->postprocess(output, origin_mat, bg_tensor));
+    this->postprocess(output, origin_mat, bg_tensor, matted);
+    // cv::imwrite("/home/david/Desktop/rrrrrr.jpeg" ,this->postprocess(output, origin_mat, bg_tensor));
 }
 
-cv::Mat HumanSegmentaion::postprocess(std::array<float, OUTPUT_TENSOR_SIZE> &output, 
+void HumanSegmentaion::postprocess(std::array<float, OUTPUT_TENSOR_SIZE> &output, 
     cv::Mat &originMat,
-    Eigen::Tensor<float, 3, Eigen::RowMajor>& bg_tensor)
+    Eigen::Tensor<float, 3, Eigen::RowMajor>& bg_tensor,
+    cv::Mat &matted)
 {
     auto start = std::chrono::steady_clock::now();
     auto size = originMat.size();
@@ -77,9 +80,9 @@ cv::Mat HumanSegmentaion::postprocess(std::array<float, OUTPUT_TENSOR_SIZE> &out
     Eigen::Tensor<float, 3, Eigen::RowMajor> origin_tensor(originMat.cols, originMat.rows, 3);
     cv::cv2eigen(originMat, origin_tensor);
    
-    std::array<float, 224 * 398> scroe_map{};
+    std::array<float, SHAPE> scroe_map{};
     auto k = output.data();
-    std::copy(k + 224 * 398, k + OUTPUT_TENSOR_SIZE, scroe_map.data());
+    std::copy(k + SHAPE, k + OUTPUT_TENSOR_SIZE, scroe_map.data());
 
     Eigen::TensorMap<Eigen::Tensor<float, 3, Eigen::RowMajor>> score_tensor{scroe_map.data(), 1, 224, 398};
    
@@ -96,22 +99,22 @@ cv::Mat HumanSegmentaion::postprocess(std::array<float, OUTPUT_TENSOR_SIZE> &out
     
     Eigen::array<int, 3> bcast = {1, 1, 3};
     Eigen::Tensor<float, 3, Eigen::RowMajor> ab = alpha.broadcast(bcast);
-   
+
     Eigen::Tensor<float, 3, Eigen::RowMajor> comb = ab * origin_tensor + (1 - ab) * bg_tensor;
-   
-    Eigen::Tensor<int, 3, Eigen::RowMajor> results = comb.cast<int>();
+    Eigen::Tensor<cv::uint8_t, 3, Eigen::RowMajor> results = comb.cast<cv::uint8_t>();
     
-    Mat r_mat;
-    cv::eigen2cv(results, r_mat);
+    //Mat r_mat;
+    cv::eigen2cv(results, matted);
+    std::cout << "Matted channels: " << matted.channels() << " depth " << matted.depth() << std::endl;
 
     auto end = std::chrono::steady_clock::now();
     double dr_s = std::chrono::duration<double, std::milli>(end - start).count();
     std::cout << "Postprocess time: " << dr_s << "ms" << std::endl;
     
-    return r_mat;
+   // return r_mat;
 }
 
-void HumanSegmentaion::normalize(const cv::Mat &img, Eigen::Tensor<float, 3, Eigen::RowMajor> &tensor)
+void HumanSegmentaion::normalize(cv::Mat &img, Eigen::Tensor<float, 3, Eigen::RowMajor> &tensor)
 {
     cv::cv2eigen(img, tensor);
     tensor = tensor / 255.0f;
@@ -124,7 +127,7 @@ Eigen::Tensor<float, 4, Eigen::RowMajor> HumanSegmentaion::preprocess(cv::Mat &i
 {
     auto start = std::chrono::steady_clock::now();
 
-    cv::cvtColor(img, img, cv::COLOR_BGR2RGB);
+    cv::cvtColor(img, img, cv::COLOR_BGRA2RGB);
     cv::resize(img, img, cv::Size(398, 224));
 
     Eigen::Tensor<float, 3, Eigen::RowMajor> imageTensor;
@@ -135,7 +138,6 @@ Eigen::Tensor<float, 4, Eigen::RowMajor> HumanSegmentaion::preprocess(cv::Mat &i
     Eigen::Tensor<float, 3, Eigen::RowMajor> transposed = imageTensor.shuffle(shuffling);
    
     // Add a dimension
-    // Eigen::array<int, 4> dims{{1, 3, 224, 398}};
     Eigen::Tensor<float, 4, Eigen::RowMajor> reshaped = transposed.reshape(_inputShape);
 
     auto end = std::chrono::steady_clock::now();
@@ -145,7 +147,7 @@ Eigen::Tensor<float, 4, Eigen::RowMajor> HumanSegmentaion::preprocess(cv::Mat &i
     return reshaped;
 }
 
-Eigen::Tensor<float, 3, Eigen::RowMajor> HumanSegmentaion::generateBg(cv::Mat& bg, cv::Size& size)
+Eigen::Tensor<float, 3, Eigen::RowMajor> HumanSegmentaion::GenerateBg(cv::Mat& bg, cv::Size& size)
 {
     cv::resize(bg, bg, size);
     static Eigen::Tensor<float, 3, Eigen::RowMajor> bg_tensor(size.height, size.width, 3);

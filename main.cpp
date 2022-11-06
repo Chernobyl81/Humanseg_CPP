@@ -21,7 +21,7 @@ void test()
     std::cout << "-----------" << std::endl;
 
     Eigen::array<int, 3> bcast = {1, 1, 3};
-    Eigen::Tensor<int, 3> ac =  C.broadcast(bcast);
+    Eigen::Tensor<int, 3> ac = C.broadcast(bcast);
     std::cout << ac.dimensions() << std::endl;
     std::cout << ac << std::endl;
     // std::cout << res << std::endl;
@@ -35,26 +35,69 @@ void test()
     // std::cout << B << std::endl;
 }
 
-void matting(char **argv)
+int matting(char **argv)
 {
-    cv::Mat image = cv::imread(argv[2]);
-    auto imageSize = image.size();
-
+    
+    // camera seg
     cv::Mat bg = cv::imread(argv[3]);
+    VideoCapture cap(0);
 
-    Eigen::Tensor<float, 3, Eigen::RowMajor> bg_tensor = onnx::hs::HumanSegmentaion::generateBg(bg, imageSize);
-    onnx::hs::HumanSegmentaion hs(argv[1]);
+    if (cap.isOpened() == false)
+    {
+        std::cout << "Cannot open the video camera" << std::endl;
+        std::cin.get();
+        return EXIT_FAILURE;
+    }
 
-    auto start = std::chrono::steady_clock::now();
-    hs.detect(image, bg_tensor);
+    auto dWidth = cap.get(CAP_PROP_FRAME_WIDTH);
+    auto dHeight = cap.get(CAP_PROP_FRAME_HEIGHT);
+    cv::Size s{static_cast<int>(dWidth), static_cast<int>(dHeight)};
+    std::cout << "width: " << s.width << " height: " << s.height << std::endl;
 
-    auto end = std::chrono::steady_clock::now();
-    double dr_s = std::chrono::duration<double, std::milli>(end - start).count();
-    std::cout << "Total time: " << dr_s << "ms" << std::endl;
+    Eigen::Tensor<float, 3, Eigen::RowMajor> bg_tensor = 
+        onnx::hs::HumanSegmentaion::GenerateBg(bg, s);
+    onnx::hs::HumanSegmentaion hs(argv[1], std::stoi(argv[4]));
+
+    std::string window_name = "My Camera Feed";
+    namedWindow(window_name);
+
+    while (true)
+    {
+
+        Mat frame;
+        Mat output;
+        bool bSuccess = cap.read(frame);
+
+        if (bSuccess == false)
+        {
+            std::cout << "Video camera is disconnected" << std::endl;
+            std::cin.get();
+            break;
+        }
+
+        auto start = std::chrono::steady_clock::now();
+        
+        hs.detect(frame, bg_tensor, output);
+        
+        auto end = std::chrono::steady_clock::now();
+        double dr_s = std::chrono::duration<double, std::milli>(end - start).count();
+        std::cout << "Total time: " << dr_s << "ms" << std::endl;
+
+        imshow(window_name, output);
+
+        if (waitKey(10) == 27)
+        {
+            std::cout << "Esc key is pressed by user. Stoppig the video" << std::endl;
+            break;
+        }
+    }
+
+    cap.release();
+    return 0;
 }
 
 int main(int argc, char **argv)
 {
     matting(argv);
-   // test();
+    // test();
 }
