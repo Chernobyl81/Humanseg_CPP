@@ -19,6 +19,12 @@ int matting(char **argv)
 
     auto dWidth = cap.get(CAP_PROP_FRAME_WIDTH);
     auto dHeight = cap.get(CAP_PROP_FRAME_HEIGHT);
+
+    int fontWeight = 2;
+    int fontSize = 1;
+    Scalar fontColor(255, 255, 255);
+    cv::Point textPosition{20, 30};
+
     cv::Size frame_size{static_cast<int>(dWidth), static_cast<int>(dHeight)};
     std::cout << "width: " << frame_size.width << " height: " << frame_size.height << std::endl;
 
@@ -47,8 +53,10 @@ int matting(char **argv)
         
         auto end = std::chrono::steady_clock::now();
         double dr_s = std::chrono::duration<double, std::milli>(end - start).count();
-        std::cout << "Total time usage: " << dr_s << "ms \n<<<<<<<<" << std::endl;
+        // std::cout << "FPS: " << 1000/dr_s << "\n<<<<<<<<" << std::endl;
+        std::string text = "FPS: " + std::to_string(1000/dr_s);
 
+        putText(output, text, textPosition, FONT_HERSHEY_COMPLEX, fontSize, fontColor, fontWeight);
         imshow(window_name, output);
 
         if (waitKey(10) == 27)

@@ -5,7 +5,8 @@
             "includePath": [
                 "${default}",
                 "${workspaceFolder}",
-                "${workspaceFolder}/**"
+                "${workspaceFolder}/**",
+                "${workspaceFolder}/onnxruntime"
             ],
             "defines": [],
             "compilerPath": "/usr/bin/clang",

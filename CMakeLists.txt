@@ -12,7 +12,6 @@ message(STATUS "BUILD FLAGS: ${CMAKE_CXX_FLAGS}")
 include(CTest)
 enable_testing()
 
-find_package(Threads)
 find_package(OpenCV REQUIRED)
 
 #set(TOOLKIT_ROOT_DIR ${CMAKE_SOURCE_DIR})
