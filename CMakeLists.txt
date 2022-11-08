@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.22.1)
+cmake_minimum_required(VERSION 3.24.3)
 project(PP_HumanSeg_CPP VERSION 0.1.0)
 
 set(CMAKE_BUILD_TYPE Debug)
@@ -12,9 +12,11 @@ message(STATUS "BUILD FLAGS: ${CMAKE_CXX_FLAGS}")
 include(CTest)
 enable_testing()
 
+find_package(Threads)
 find_package(OpenCV REQUIRED)
+
 #set(TOOLKIT_ROOT_DIR ${CMAKE_SOURCE_DIR})
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/onnxruntime)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/onnxruntime ${CMAKE_CURRENT_SOURCE_DIR}/opencv2)
 
 add_executable(PP_HumanSeg_CPP main.cpp onnx/cv/human_segmentation.cc)
 target_link_libraries(${PROJECT_NAME} onnxruntime ${OpenCV_LIBS})
