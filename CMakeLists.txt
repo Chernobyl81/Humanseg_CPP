@@ -17,8 +17,12 @@ find_package(OpenCV REQUIRED)
 #set(TOOLKIT_ROOT_DIR ${CMAKE_SOURCE_DIR})
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/onnxruntime ${CMAKE_CURRENT_SOURCE_DIR}/opencv2)
 
+option(USE_CUDA "use CUDA" OFF)
+option(USE_TR "use TensorRT" OFF)
+configure_file(config.h.in config.h @ONLY)
+
 add_executable(PP_HumanSeg_CPP main.cpp onnx/cv/human_segmentation.cc)
-target_link_libraries(${PROJECT_NAME} onnxruntime ${OpenCV_LIBS})
+target_link_libraries(${PROJECT_NAME} onnxruntime ${OpenCV_LIBS} pthread)
 
 set(CPACK_PROJECT_NAME ${PROJECT_NAME})
 set(CPACK_PROJECT_VERSION ${PROJECT_VERSION})

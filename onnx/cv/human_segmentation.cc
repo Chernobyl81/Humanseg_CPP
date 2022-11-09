@@ -3,29 +3,40 @@
 using namespace onnx::hs;
 
 HumanSegmentaion::HumanSegmentaion(const char *modelPath,
-                                   int numThreads)
+                                   int numThreads,
+                                   Device device)
     : m_ortEnv(Ort::Env(ORT_LOGGING_LEVEL_ERROR, modelPath)),
       m_memoryInfo(Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault)),
       m_numThreads(numThreads),
-      m_ortSession(std::make_unique<Ort::Session>(m_ortEnv, modelPath, initSessionOptions()))
+      m_ortSession(std::make_unique<Ort::Session>(m_ortEnv, modelPath, initSessionOptions(device)))
 
 {
 }
 
-Ort::SessionOptions HumanSegmentaion::initSessionOptions()
+Ort::SessionOptions HumanSegmentaion::initSessionOptions(Device device)
 {
-    Ort::SessionOptions session_options;
-#ifdef __ANDROID__
-    OrtSessionOptionsAppendExecutionProvider_Nnapi(session_options, 0x001);
-#elif __CUDA__
-    OrtSessionOptionsAppendExecutionProvider_CUDA(session_options, 0x001);
-#endif
-    session_options.SetIntraOpNumThreads(this->m_numThreads);
-    session_options.SetExecutionMode(ORT_SEQUENTIAL);
-    session_options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
-    session_options.SetLogSeverityLevel(4);
+    Ort::SessionOptions sessionOptions;
+    // #ifdef __ANDROID__
+    //     OrtSessionOptionsAppendExecutionProvider_Nnapi(session_options, 0x000);
+    // #endif
+    if (device == Device::CUDA)
+    {
+        std::cout << "Run with CUDA" << std::endl;
+        Ort::ThrowOnError(OrtSessionOptionsAppendExecutionProvider_CUDA(sessionOptions, 0x000));
+    }
+    else if (device == Device::TensorRT)
+    {
+        std::cout << "Run with TR" << std::endl;
+        Ort::ThrowOnError(OrtSessionOptionsAppendExecutionProvider_Tensorrt(sessionOptions, 0x000));
+        Ort::ThrowOnError(OrtSessionOptionsAppendExecutionProvider_CUDA(sessionOptions, 0x000));
+    }
 
-    return session_options;
+    sessionOptions.SetIntraOpNumThreads(this->m_numThreads);
+    sessionOptions.SetExecutionMode(ORT_SEQUENTIAL);
+    sessionOptions.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
+    sessionOptions.SetLogSeverityLevel(4);
+
+    return sessionOptions;
 }
 
 void HumanSegmentaion::detect(Mat &frame, const Tensor3f &bgTensor, Mat &matted)
