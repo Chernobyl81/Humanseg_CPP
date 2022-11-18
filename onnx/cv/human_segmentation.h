@@ -5,11 +5,6 @@
 #include <chrono>
 #include "onnxruntime_cxx_api.h"
 #include "tensorrt_provider_factory.h"
-// #include "Eigen/Core"
-// #include "Eigen/Dense"
-// #include "../../build/config.h"
-// #include "opencv2/opencv.hpp"
-// #include "opencv2/core/eigen.hpp"
 #include "../onnx/core/human_seg_model_info.h"
 
 
