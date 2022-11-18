@@ -1,6 +1,7 @@
 #include "human_segmentation.h"
 
 using namespace onnx::hs;
+using namespace onnx::core;
 
 HumanSegmentaion::HumanSegmentaion(const char *modelPath,
                                    int numThreads,
@@ -51,17 +52,17 @@ void HumanSegmentaion::detect(Mat &frame, const Tensor3f &bgTensor, Mat &matted)
     Ort::Value input_tensor = Ort::Value::CreateTensor<float>(
         m_memoryInfo,
         inputData,
-        INPUT_TENSOR_SIZE,
-        MODEL_INPUT_SHAPE.data(),
-        MODEL_INPUT_SHAPE.size());
+        HumanSegModelInfo::INPUT_TENSOR_SIZE,
+        m_model_info.MODEL_INPUT_SHAPE.data(),
+        m_model_info.MODEL_INPUT_SHAPE.size());
 
-    std::array<float, OUTPUT_TENSOR_SIZE> output{};
+    std::array<float, HumanSegModelInfo::OUTPUT_TENSOR_SIZE> output{};
     Ort::Value outputTensor = Ort::Value::CreateTensor<float>(
         m_memoryInfo,
         output.data(),
-        OUTPUT_TENSOR_SIZE,
-        MODEL_OUTPUT_SHAPE.data(),
-        MODEL_OUTPUT_SHAPE.size());
+        HumanSegModelInfo::OUTPUT_TENSOR_SIZE,
+        m_model_info.MODEL_OUTPUT_SHAPE.data(),
+        m_model_info.MODEL_OUTPUT_SHAPE.size());
 
     auto end = std::chrono::steady_clock::now();
     double dr_s = std::chrono::duration<double, std::milli>(end - start).count();
@@ -70,10 +71,10 @@ void HumanSegmentaion::detect(Mat &frame, const Tensor3f &bgTensor, Mat &matted)
 
     m_ortSession->Run(
         Ort::RunOptions{nullptr},
-        &MODEL_INPUT_NAMES,
+        &m_model_info.MODEL_INPUT_NAMES,
         &input_tensor,
         1,
-        &MODEL_OUTPUT_NAMES,
+        &m_model_info.MODEL_OUTPUT_NAMES,
         &outputTensor,
         1);
 
@@ -84,7 +85,7 @@ void HumanSegmentaion::detect(Mat &frame, const Tensor3f &bgTensor, Mat &matted)
     this->postprocess(output, origin_mat, bgTensor, matted);
 }
 
-void HumanSegmentaion::postprocess(const std::array<float, OUTPUT_TENSOR_SIZE> &output,
+void HumanSegmentaion::postprocess(const std::array<float, HumanSegModelInfo::OUTPUT_TENSOR_SIZE> &output,
                                    const cv::Mat &originMat,
                                    const Tensor3f &bgTensor,
                                    cv::Mat &matted)
@@ -95,9 +96,9 @@ void HumanSegmentaion::postprocess(const std::array<float, OUTPUT_TENSOR_SIZE> &
     Tensor3f origin_tensor(originMat.cols, originMat.rows, 3);
     cv::cv2eigen(originMat, origin_tensor);
 
-    std::array<float, SHAPE> scroe_map{};
+    std::array<float, HumanSegModelInfo::SHAPE> scroe_map{};
     auto k = output.data();
-    std::copy(k + SHAPE, k + OUTPUT_TENSOR_SIZE, scroe_map.data());
+    std::copy(k + HumanSegModelInfo::SHAPE, k + HumanSegModelInfo::OUTPUT_TENSOR_SIZE, scroe_map.data());
 
     Eigen::TensorMap<Tensor3f> score_tensor{scroe_map.data(), 1, 224, 398};
 
@@ -148,7 +149,7 @@ const Tensor4f HumanSegmentaion::preprocess(cv::Mat &frame)
     Tensor3f transposed = imageTensor.shuffle(shuffling);
 
     // Add a dimension
-    Tensor4f reshaped = transposed.reshape(MODEL_INPUT_SHAPE);
+    Tensor4f reshaped = transposed.reshape(m_model_info.MODEL_INPUT_SHAPE);
 
     auto end = std::chrono::steady_clock::now();
     double dr_s = std::chrono::duration<double, std::milli>(end - start).count();
