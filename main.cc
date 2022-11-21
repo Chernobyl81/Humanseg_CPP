@@ -1,10 +1,14 @@
 #include <iostream>
 #include <chrono>
+#include <vector>
+#include <mutex>
 #include <opencv2/opencv.hpp>
 #include "onnx/cv/human_segmentation.h"
 #include "grpc_client.h"
 
 namespace tc = triton::client;
+using namespace onnx::core;
+using namespace onnx::hs;
 
 struct ModelInfo
 {
@@ -47,10 +51,10 @@ int matting(char **argv)
     cv::Size frame_size{static_cast<int>(dWidth), static_cast<int>(dHeight)};
     std::cout << "width: " << frame_size.width << " height: " << frame_size.height << std::endl;
 
-    Tensor3f bg_tensor = onnx::hs::HumanSegmentaion::GenerateBg(bg, frame_size);
+    Tensor3f bg_tensor = HumanSegmentaion::GenerateBg(bg, frame_size);
 
-    auto device = onnx::hs::HumanSegmentaion::StringToDevice(argv[5]);
-    onnx::hs::HumanSegmentaion hs(argv[1], std::stoi(argv[4]), device);
+    auto device = HumanSegmentaion::StringToDevice(argv[5]);
+    HumanSegmentaion hs(argv[1], std::stoi(argv[4]), device);
 
     std::string window_name = "My Camera Feed";
     namedWindow(window_name);
@@ -209,30 +213,6 @@ void ParseModelGrpc(
     // Output is expected to be a vector. But allow any number of
     // dimensions as long as all but 1 is size 1 (e.g. { 10 }, { 1, 10
     // }, { 10, 1, 1 } are all ok).
-    bool output_batch_dim = (model_info->max_batch_size_ > 0);
-    size_t non_one_cnt = 0;
-    for (const auto dim : output_metadata.shape())
-    {
-        if (output_batch_dim)
-        {
-            output_batch_dim = false;
-        }
-        else if (dim == -1)
-        {
-            std::cerr << "variable-size dimension in model output not supported"
-                      << std::endl;
-            exit(1);
-        }
-        else if (dim > 1)
-        {
-            non_one_cnt += 1;
-            if (non_one_cnt > 1)
-            {
-                std::cerr << "expecting model output to be a vector" << std::endl;
-                exit(1);
-            }
-        }
-    }
 
     // Model input must have 3 dims, either CHW or HWC (not counting the
     // batch dimension), either CHW or HWC
@@ -296,6 +276,7 @@ void grpc_test(char **argv)
     tc::Headers http_headers;
     std::unique_ptr<tc::InferenceServerGrpcClient> grpc_client;
 
+    size_t batch_size = 1;
     bool verbose = true;
     err = tc::InferenceServerGrpcClient::Create(&grpc_client, "localhost:8001", verbose);
 
@@ -320,7 +301,48 @@ void grpc_test(char **argv)
         std::cerr << "error: failed to get model config: " << err << std::endl;
     }
 
-    ParseModelGrpc(model_metadata, model_config, 1, &model_info);
+    ParseModelGrpc(model_metadata, model_config, batch_size, &model_info);
+
+    std::vector<int64_t> shape;
+    // Include the batch dimension if required
+    if (model_info.max_batch_size_ != 0)
+    {
+        shape.push_back(batch_size);
+    }
+    if (model_info.input_format_.compare("FORMAT_NHWC") == 0)
+    {
+        shape.push_back(model_info.input_h_);
+        shape.push_back(model_info.input_w_);
+        shape.push_back(model_info.input_c_);
+    }
+    else
+    {
+        shape.push_back(model_info.input_c_);
+        shape.push_back(model_info.input_h_);
+        shape.push_back(model_info.input_w_);
+    }
+
+    tc::InferInput *input;
+    err = tc::InferInput::Create(&input, model_info.input_name_, shape, model_info.input_datatype_);
+    if (!err.IsOk())
+    {
+        std::cerr << "unable to get input: " << err << std::endl;
+        exit(1);
+    }
+    std::shared_ptr<tc::InferInput> input_ptr(input);
+
+    tc::InferRequestedOutput *output;
+    // Set the number of classification expected
+    err = tc::InferRequestedOutput::Create(&output, model_info.output_name_);
+    if (!err.IsOk())
+    {
+        std::cerr << "unable to get output: " << err << std::endl;
+        exit(1);
+    }
+    std::shared_ptr<tc::InferRequestedOutput> output_ptr(output);
+
+    std::vector<tc::InferInput *> inputs = {input_ptr.get()};
+    std::vector<const tc::InferRequestedOutput *> outputs = {output_ptr.get()};
 }
 
 int main(int argc, char **argv)
