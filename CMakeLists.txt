@@ -3,10 +3,10 @@ project(PP_HumanSeg_CPP VERSION 0.1.0)
 
 set(CMAKE_BUILD_TYPE Debug)
 set(CMAKE_CXX_FLAGS "-O3")
-set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD 17)
 set(VERSION_STRING 0.1.0)
 set(SOVERSION_STRING 0.1.0)
-set(CMAKE_CXX_FLAGS "-Wno-deprecated ${CMAKE_CXX_FLAGS} -L/usr/local/lib -L/home/david/Projects/client/build/install/lib")
+set(CMAKE_CXX_FLAGS "-Wno-deprecated ${CMAKE_CXX_FLAGS} -L/home/david/Projects/client/build/install/lib")
 
 message(STATUS "BUILD FLAGS: ${CMAKE_CXX_FLAGS}")
 
@@ -29,7 +29,7 @@ add_executable(${PROJECT_NAME} main.cc onnx/cv/human_segmentation.cc)
 
 target_include_directories(
     ${PROJECT_NAME} PRIVATE 
-    /home/david/Downloads/v2.27.0_ubuntu2004.clients/include
+    /home/david/Projects/client/build/install/include
     )
 
 target_link_libraries(
@@ -38,6 +38,7 @@ target_link_libraries(
     ${OpenCV_LIBS} 
     pthread 
     grpcclient
+    protobuf
     )
 
 set(CPACK_PROJECT_NAME ${PROJECT_NAME})

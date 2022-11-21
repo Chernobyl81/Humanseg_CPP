@@ -17,6 +17,7 @@ namespace onnx
     {
         struct HumanSegModelInfo
         {
+            
             static const int WIDTH = 398;
             static const int HEIGHT = 224;
             static constexpr int SHAPE = WIDTH * HEIGHT;
@@ -31,7 +32,6 @@ namespace onnx
             const char *MODEL_OUTPUT_NAMES = {"save_infer_model/scale_0.tmp_1"};
 
         };
-
 
     } // namespace core
 
