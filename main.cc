@@ -343,6 +343,19 @@ void grpc_test(char **argv)
 
     std::vector<tc::InferInput *> inputs = {input_ptr.get()};
     std::vector<const tc::InferRequestedOutput *> outputs = {output_ptr.get()};
+
+    tc::InferOptions options("ppseg_onnx");
+    options.model_version_ = "1";
+
+    tc::InferResult *result;
+    err = grpc_client->Infer(
+        &result, options, inputs, outputs, http_headers);
+    if (!err.IsOk())
+    {
+        std::cerr << "failed sending synchronous infer request: " << err
+                  << std::endl;
+        exit(1);
+    }
 }
 
 int main(int argc, char **argv)
