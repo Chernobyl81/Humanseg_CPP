@@ -6,7 +6,8 @@ set(CMAKE_CXX_FLAGS "-O3")
 set(CMAKE_CXX_STANDARD 17)
 set(VERSION_STRING 0.1.0)
 set(SOVERSION_STRING 0.1.0)
-set(CMAKE_CXX_FLAGS "-Wno-deprecated ${CMAKE_CXX_FLAGS} -L/home/david/Projects/client/build/install/lib")
+
+set(CMAKE_CXX_FLAGS "-Wno-deprecated ${CMAKE_CXX_FLAGS}")
 
 message(STATUS "BUILD FLAGS: ${CMAKE_CXX_FLAGS}")
 
@@ -31,6 +32,9 @@ target_include_directories(
     ${PROJECT_NAME} PRIVATE 
     /home/david/Projects/client/build/install/include
     )
+
+string(REPLACE ":" ";" LIBRARY_DIRS $ENV{LD_LIBRARY_PATH}) 
+target_link_directories(${PROJECT_NAME} PRIVATE ${LIBRARY_DIRS})
 
 target_link_libraries(
     ${PROJECT_NAME} PRIVATE 
