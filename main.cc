@@ -293,12 +293,12 @@ void normalize(const cv::Mat &image, Tensor3f &tensor)
     tensor = tensor / 0.5f;
 }
 
-void Preprocess(const cv::Mat &img, 
-                const std::string &format, 
-                int img_type1, 
+void Preprocess(const cv::Mat &img,
+                const std::string &format,
+                int img_type1,
                 int img_type3,
-                size_t img_channels, 
-                const cv::Size &img_size, 
+                size_t img_channels,
+                const cv::Size &img_size,
                 const ScaleType scale,
                 std::vector<uint8_t> *input_data)
 {
@@ -349,6 +349,8 @@ void Preprocess(const cv::Mat &img,
     {
         sample_resized = sample;
     }
+
+    std::cout << "sample_resized's size: " << sample_resized.cols << "x" << sample_resized.rows << std::endl;
 
     cv::Mat sample_type;
     sample_resized.convertTo(
@@ -443,7 +445,8 @@ void Preprocess(const cv::Mat &img,
     }
 }
 
-void postprocess(const std::array<float, HumanSegModelInfo::OUTPUT_TENSOR_SIZE> &output,
+void postprocess(const tc::InferResult *result,
+                 const std::string &output_name,
                  const cv::Mat &originMat,
                  const Tensor3f &bgTensor,
                  cv::Mat &matted)
@@ -455,33 +458,37 @@ void postprocess(const std::array<float, HumanSegModelInfo::OUTPUT_TENSOR_SIZE> 
     cv::cv2eigen(originMat, origin_tensor);
 
     std::array<float, HumanSegModelInfo::SHAPE> scroe_map{};
-    auto k = output.data();
-    std::copy(k + HumanSegModelInfo::SHAPE, k + HumanSegModelInfo::OUTPUT_TENSOR_SIZE, scroe_map.data());
 
-    Eigen::TensorMap<Tensor3f> score_tensor{scroe_map.data(), 1, 224, 398};
+    size_t buf_size;
+    const uint8_t *buf;
+    result->RawData(output_name, &buf, &buf_size);
+    // std::cout << "get buffer size is " << *buf_size << std::endl;
+//    std::copy(buf + HumanSegModelInfo::SHAPE, buf + HumanSegModelInfo::OUTPUT_TENSOR_SIZE, scroe_map.data());
 
-    // Transpose
-    const Shape3i shuffling({1, 2, 0});
-    Tensor3f scrore_transposed = score_tensor.shuffle(shuffling);
+    // Eigen::TensorMap<Tensor3f> score_tensor{scroe_map.data(), 1, 224, 398};
 
-    Mat tmp;
-    cv::eigen2cv(scrore_transposed, tmp);
-    cv::resize(tmp, tmp, size);
+    // // Transpose
+    // const Shape3i shuffling({1, 2, 0});
+    // Tensor3f scrore_transposed = score_tensor.shuffle(shuffling);
 
-    Tensor3f alpha(size.height, size.width, 1);
-    cv::cv2eigen(tmp, alpha);
+    // Mat tmp;
+    // cv::eigen2cv(scrore_transposed, tmp);
+    // cv::resize(tmp, tmp, size);
 
-    Shape3i bcast = {1, 1, 3};
-    Tensor3f ab = alpha.broadcast(bcast);
+    // Tensor3f alpha(size.height, size.width, 1);
+    // cv::cv2eigen(tmp, alpha);
 
-    Tensor3f comb = ab * origin_tensor + (1 - ab) * bgTensor;
-    Eigen::Tensor<cv::uint8_t, 3, Eigen::RowMajor> results = comb.cast<cv::uint8_t>();
+    // Shape3i bcast = {1, 1, 3};
+    // Tensor3f ab = alpha.broadcast(bcast);
 
-    cv::eigen2cv(results, matted);
+    // Tensor3f comb = ab * origin_tensor + (1 - ab) * bgTensor;
+    // Eigen::Tensor<cv::uint8_t, 3, Eigen::RowMajor> results = comb.cast<cv::uint8_t>();
 
-    auto end = std::chrono::steady_clock::now();
-    double dr_s = std::chrono::duration<double, std::milli>(end - start).count();
-    std::cout << "Postprocess time: " << dr_s << "ms" << std::endl;
+    // cv::eigen2cv(results, matted);
+
+    // auto end = std::chrono::steady_clock::now();
+    // double dr_s = std::chrono::duration<double, std::milli>(end - start).count();
+    // std::cout << "Postprocess time: " << dr_s << "ms" << std::endl;
 }
 
 const Tensor3f GenerateBg(cv::Mat &bg, const cv::Size &size)
@@ -534,7 +541,7 @@ void get_model_info_from_server(GRPC_CLIENT &grpc_client,
     ParseModelGrpc(model_metadata, model_config, batch_size, &model_info);
 }
 
-void model_shape(const ModelInfo &model_info, const size_t batch_size, std::vector<int64_t>& shape)
+void model_shape(const ModelInfo &model_info, const size_t batch_size, std::vector<int64_t> &shape)
 {
     // Include the batch dimension if required
     if (model_info.max_batch_size_ != 0)
@@ -555,17 +562,16 @@ void model_shape(const ModelInfo &model_info, const size_t batch_size, std::vect
     }
 }
 
-void do_inference(GRPC_CLIENT& grpc_client,
-                  const ModelInfo& model_info,
-                  const std::vector<tc::InferInput *>& inputs_ptr, 
-                  const std::vector<const tc::InferRequestedOutput *>& outputs_ptr,
-                  const tc::InferOptions& options,
-                  const tc::Headers& headers,
+void do_inference(GRPC_CLIENT &grpc_client,
+                  const ModelInfo &model_info,
+                  const std::vector<tc::InferInput *> &inputs_ptr,
+                  const std::vector<const tc::InferRequestedOutput *> &outputs_ptr,
+                  const tc::InferOptions &options,
+                  const tc::Headers &headers,
+                  tc::InferResult *result,
                   bool verbose = false)
 {
     auto start = std::chrono::steady_clock::now();
-
-    tc::InferResult *result;
     auto err = grpc_client->Infer(&result, options, inputs_ptr, outputs_ptr, headers);
     if (!err.IsOk())
     {
@@ -573,6 +579,7 @@ void do_inference(GRPC_CLIENT& grpc_client,
                   << std::endl;
         exit(1);
     }
+
     auto end = std::chrono::steady_clock::now();
     double dr_s = std::chrono::duration<double, std::milli>(end - start).count();
     std::cout << "Postprocess time: " << dr_s << "ms" << std::endl;
@@ -611,21 +618,18 @@ void do_inference(GRPC_CLIENT& grpc_client,
               << "result shape 2 is " << shape.at(1) << "\n"
               << "result shape 3 is " << shape.at(2) << "\n"
               << "result shape 3 is " << shape.at(3) << std::endl;
-
-
-
 }
 
-void grpc_test(GRPC_CLIENT &grpc_client, 
-                const ModelInfo& model_info, 
-                const tc::Headers& header,
-                const size_t batch_size,
-                const Mat& origin_mat,
-                const Mat& bg,
-                bool verbose = false)
+void grpc_test(GRPC_CLIENT &grpc_client,
+               const ModelInfo &model_info,
+               const tc::Headers &header,
+               const size_t batch_size,
+               const Mat &origin_mat,
+               const Tensor3f &bg,
+               bool verbose = false)
 {
     tc::Error err;
-    
+
     std::vector<int64_t> shape;
     model_shape(model_info, batch_size, shape);
 
@@ -653,28 +657,23 @@ void grpc_test(GRPC_CLIENT &grpc_client,
     tc::InferOptions options("ppseg_onnx");
     options.model_version_ = "1";
 
-    // cv::Mat origin_mat = cv::imread(origin_image_name);
-    // auto size = origin_mat.size();
-    // Tensor3f origin_tensor(origin_mat.cols, origin_mat.rows, 3);
-    // cv::cv2eigen(origin_mat, origin_tensor);
-
-    // cv::Mat bg_mat = cv::imread(background_image_name);
-    // auto bgTensor = GenerateBg(bg_mat, size);
-
     std::vector<uint8_t> input_data;
-    Preprocess(origin_mat, 
-               model_info.input_format_, 
-               model_info.type1_, 
-               model_info.type3_, 
-               model_info.input_c_, 
-               cv::Size(model_info.input_w_, model_info.input_h_), 
-               ScaleType::INCEPTION, 
+    Preprocess(origin_mat,
+               model_info.input_format_,
+               model_info.type1_,
+               model_info.type3_,
+               model_info.input_c_,
+               cv::Size(model_info.input_w_, model_info.input_h_),
+               ScaleType::INCEPTION,
                &input_data);
 
     err = input_ptr->AppendRaw(input_data);
 
-    do_inference(grpc_client, model_info, inputs, outputs, options, header, verbose);
+    tc::InferResult *result;
+    do_inference(grpc_client, model_info, inputs, outputs, options, header, result, verbose);
 
+    Mat matted;
+    postprocess(result, model_info.output_name_, origin_mat, bg, matted);
     // size_t kk = 398 * 224 * 2;
     // const uint8_t *buf;
     // std::array<float, HumanSegModelInfo::SHAPE> scroe_map{};
@@ -703,8 +702,6 @@ void grpc_test(GRPC_CLIENT &grpc_client,
     // cv::Mat matted;
     // cv::eigen2cv(results, matted);
 
-    
-
     // cv::imwrite("/home/david/Desktop/res.jpg", matted);
 }
 
@@ -732,5 +729,9 @@ int main(int argc, char **argv)
     Mat origin_image = cv::imread(argv[3]);
     Mat bg = cv::imread(argv[4]);
 
-    grpc_test(client, model_info, headers, batch_size, origin_image, bg, verbose);
+    // cv::resize(bg, bg, cv::Size(origin_image.cols, origin_image.rows));
+    // cv::imwrite(argv[6], bg);
+
+    auto bg_tensor = GenerateBg(bg, cv::Size(origin_image.cols, origin_image.rows));
+    grpc_test(client, model_info, headers, batch_size, origin_image, bg_tensor, verbose);
 }
