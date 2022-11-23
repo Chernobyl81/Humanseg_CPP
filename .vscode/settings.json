@@ -67,7 +67,9 @@
         "typeinfo": "cpp",
         "shared_mutex": "cpp",
         "cfenv": "cpp",
-        "future": "cpp"
+        "future": "cpp",
+        "any": "cpp"
     },
-    "C_Cpp.errorSquiggles": "Enabled"
+    "C_Cpp.errorSquiggles": "Enabled",
+    "git.ignoreLimitWarning": true
 }
