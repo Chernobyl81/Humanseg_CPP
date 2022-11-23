@@ -557,10 +557,10 @@ void model_shape(const ModelInfo &model_info, const size_t batch_size, std::vect
 
 void do_inference(GRPC_CLIENT& grpc_client,
                   const ModelInfo& model_info,
-                  const std::vector<tc::InferInput *> inputs_ptr, 
-                  const std::vector<const tc::InferRequestedOutput *> outputs_ptr,
+                  const std::vector<tc::InferInput *>& inputs_ptr, 
+                  const std::vector<const tc::InferRequestedOutput *>& outputs_ptr,
                   const tc::InferOptions& options,
-                  const tc::Headers headers,
+                  const tc::Headers& headers,
                   bool verbose = false)
 {
     auto start = std::chrono::steady_clock::now();
