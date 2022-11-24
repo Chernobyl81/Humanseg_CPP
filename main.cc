@@ -258,8 +258,6 @@ void ParseModelGrpc(const inference::ModelMetadataResponse &model_metadata,
 
     if (input_config.format() == inference::ModelInput::FORMAT_NHWC)
     {
-        std::cout << "input format is FORMAT_NHWC" << std::endl;
-
         model_info->input_format_ = "FORMAT_NHWC";
         model_info->input_h_ = input_metadata.shape(input_batch_dim ? 1 : 0);
         model_info->input_w_ = input_metadata.shape(input_batch_dim ? 2 : 1);
@@ -370,9 +368,6 @@ void Preprocess(const cv::Mat &img,
             sample_final = sample_type.mul(cv::Scalar(1 / 255.0));
             sample_final = sample_final - cv::Scalar(0.5);
             sample_final = sample_final.mul(Scalar(2.0));
-            // sample_final =
-            //     sample_type.mul(cv::Scalar(1 / 127.5, 1 / 127.5, 1 / 127.5));
-            // sample_final = sample_final - cv::Scalar(1.0, 1.0, 1.0);
         }
     }
     else if (scale == ScaleType::VGG)
@@ -451,6 +446,7 @@ void postprocess(const tc::InferResult *result,
                  const Tensor3f &bgTensor,
                  cv::Mat &matted)
 {
+    tc::Error err;
     auto start = std::chrono::steady_clock::now();
     auto size = originMat.size();
 
@@ -459,36 +455,15 @@ void postprocess(const tc::InferResult *result,
 
     std::array<float, HumanSegModelInfo::SHAPE> scroe_map{};
 
-    size_t buf_size;
+    std::string model_name;
+    std::cout << result->ModelName(&model_name) << std::endl;
+    size_t buf_size = 398 * 224 * 2;
     const uint8_t *buf;
-    result->RawData(output_name, &buf, &buf_size);
-    // std::cout << "get buffer size is " << *buf_size << std::endl;
-//    std::copy(buf + HumanSegModelInfo::SHAPE, buf + HumanSegModelInfo::OUTPUT_TENSOR_SIZE, scroe_map.data());
-
-    // Eigen::TensorMap<Tensor3f> score_tensor{scroe_map.data(), 1, 224, 398};
-
-    // // Transpose
-    // const Shape3i shuffling({1, 2, 0});
-    // Tensor3f scrore_transposed = score_tensor.shuffle(shuffling);
-
-    // Mat tmp;
-    // cv::eigen2cv(scrore_transposed, tmp);
-    // cv::resize(tmp, tmp, size);
-
-    // Tensor3f alpha(size.height, size.width, 1);
-    // cv::cv2eigen(tmp, alpha);
-
-    // Shape3i bcast = {1, 1, 3};
-    // Tensor3f ab = alpha.broadcast(bcast);
-
-    // Tensor3f comb = ab * origin_tensor + (1 - ab) * bgTensor;
-    // Eigen::Tensor<cv::uint8_t, 3, Eigen::RowMajor> results = comb.cast<cv::uint8_t>();
-
-    // cv::eigen2cv(results, matted);
-
-    // auto end = std::chrono::steady_clock::now();
-    // double dr_s = std::chrono::duration<double, std::milli>(end - start).count();
-    // std::cout << "Postprocess time: " << dr_s << "ms" << std::endl;
+    err = result->RawData(output_name, &buf, &buf_size);
+    if (!err.IsOk())
+    {
+        std::cout << err.Message() << std::endl;
+    }
 }
 
 const Tensor3f GenerateBg(cv::Mat &bg, const cv::Size &size)
@@ -569,6 +544,9 @@ void do_inference(GRPC_CLIENT &grpc_client,
                   const tc::InferOptions &options,
                   const tc::Headers &headers,
                   tc::InferResult *result,
+                  const Mat &origin_mat,
+                  const Tensor3f &bgTensor,
+                  Mat &output_mat,
                   bool verbose = false)
 {
     auto start = std::chrono::steady_clock::now();
@@ -582,7 +560,7 @@ void do_inference(GRPC_CLIENT &grpc_client,
 
     auto end = std::chrono::steady_clock::now();
     double dr_s = std::chrono::duration<double, std::milli>(end - start).count();
-    std::cout << "Postprocess time: " << dr_s << "ms" << std::endl;
+    std::cout << "Inference time: " << dr_s << "ms" << std::endl;
 
     if (!result->RequestStatus().IsOk())
     {
@@ -613,11 +591,82 @@ void do_inference(GRPC_CLIENT &grpc_client,
         exit(1);
     }
 
-    std::cout << "result shape size " << shape.size() << std::endl;
-    std::cout << "result shape 1 is " << shape.at(0) << "\n"
-              << "result shape 2 is " << shape.at(1) << "\n"
-              << "result shape 3 is " << shape.at(2) << "\n"
-              << "result shape 3 is " << shape.at(3) << std::endl;
+    // std::cout << "result shape size " << shape.size() << std::endl;
+    // std::cout << "result shape 1 is " << shape.at(0) << "\n"
+    //           << "result shape 2 is " << shape.at(1) << "\n"
+    //           << "result shape 3 is " << shape.at(2) << "\n"
+    //           << "result shape 3 is " << shape.at(3) << std::endl;
+
+    std::string model_name;
+    err = result->ModelName(&model_name);
+    if (!err.IsOk())
+    {
+        std::cout << "get model_name error " << err.Message() << std::endl;
+    }
+
+    std::cout << "model_name is " << model_name << std::endl;
+    size_t buf_size;
+    ;
+    const uint8_t *buffer;
+    std::array<float, HumanSegModelInfo::SHAPE> scroe_map{};
+    err = result->RawData(model_info.output_name_, &buffer, &buf_size);
+    if (!err.IsOk())
+    {
+        std::cout << "get rawData error " << err.Message() << std::endl;
+    }
+
+    std::cout << "get buf size is " << buf_size << std::endl;
+    auto casted = (float *)(buffer);
+
+    std::copy(casted + HumanSegModelInfo::SHAPE, casted + HumanSegModelInfo::OUTPUT_TENSOR_SIZE + 1, scroe_map.data());
+    std::cout << "score_map data size " << scroe_map.size() << std::endl;
+    std::cout << "score_map data[89151] " << scroe_map[89151] << std::endl;
+
+    Eigen::TensorMap<Tensor3f> score_tensor{scroe_map.data(), 1, 224, 398};
+    std::cout << "score_tensor[111]" << score_tensor(0, 0, 34) << std::endl;
+
+    Tensor3f origin_tensor(origin_mat.cols, origin_mat.rows, 3);
+    cv::cv2eigen(origin_mat, origin_tensor);
+
+    // Transpose
+    const Shape3i shuffling({1, 2, 0});
+    Tensor3f scrore_transposed = score_tensor.shuffle(shuffling);
+
+    Mat tmp;
+    auto size = origin_mat.size();
+    cv::eigen2cv(scrore_transposed, tmp);
+    cv::resize(tmp, tmp, size);
+
+    Tensor3f alpha(size.height, size.width, 1);
+    cv::cv2eigen(tmp, alpha);
+
+    Shape3i bcast = {1, 1, 3};
+    Tensor3f ab = alpha.broadcast(bcast);
+
+    Tensor3f comb = ab * origin_tensor + (1 - ab) * bgTensor;
+    Eigen::Tensor<cv::uint8_t, 3, Eigen::RowMajor> results = comb.cast<cv::uint8_t>();
+
+#ifdef __GRPC_STAT__
+    std::cout << result->DebugString() << std::endl;
+
+    tc::InferStat infer_stat;
+    grpc_client->ClientInferStat(&infer_stat);
+    std::cout << "======Client Statistics======" << std::endl;
+    std::cout << "completed_request_count "
+              << infer_stat.completed_request_count << std::endl;
+    std::cout << "cumulative_total_request_time_ns "
+              << infer_stat.cumulative_total_request_time_ns << std::endl;
+    std::cout << "cumulative_send_time_ns "
+              << infer_stat.cumulative_send_time_ns << std::endl;
+    std::cout << "cumulative_receive_time_ns "
+              << infer_stat.cumulative_receive_time_ns << std::endl;
+
+    inference::ModelStatisticsResponse model_stat;
+    grpc_client->ModelInferenceStatistics(&model_stat, model_name);
+    std::cout << "======Model Statistics======" << std::endl;
+    std::cout << model_stat.DebugString() << std::endl;
+#endif
+    cv::eigen2cv(results, output_mat);
 }
 
 void grpc_test(GRPC_CLIENT &grpc_client,
@@ -626,6 +675,7 @@ void grpc_test(GRPC_CLIENT &grpc_client,
                const size_t batch_size,
                const Mat &origin_mat,
                const Tensor3f &bg,
+               Mat &output_mat,
                bool verbose = false)
 {
     tc::Error err;
@@ -670,44 +720,22 @@ void grpc_test(GRPC_CLIENT &grpc_client,
     err = input_ptr->AppendRaw(input_data);
 
     tc::InferResult *result;
-    do_inference(grpc_client, model_info, inputs, outputs, options, header, result, verbose);
-
-    Mat matted;
-    postprocess(result, model_info.output_name_, origin_mat, bg, matted);
-    // size_t kk = 398 * 224 * 2;
-    // const uint8_t *buf;
-    // std::array<float, HumanSegModelInfo::SHAPE> scroe_map{};
-    // result->RawData(model_info.output_name_, &buf, &kk);
-
-    // std::copy(buf + HumanSegModelInfo::SHAPE, buf + HumanSegModelInfo::OUTPUT_TENSOR_SIZE + 1, scroe_map.data());
-    // Eigen::TensorMap<Tensor3f> score_tensor{scroe_map.data(), 1, 224, 398};
-
-    // // Transpose
-    // const Shape3i shuffling({1, 2, 0});
-    // Tensor3f scrore_transposed = score_tensor.shuffle(shuffling);
-
-    // Mat tmp;
-    // cv::eigen2cv(scrore_transposed, tmp);
-    // cv::resize(tmp, tmp, size);
-
-    // Tensor3f alpha(size.height, size.width, 1);
-    // cv::cv2eigen(tmp, alpha);
-
-    // Shape3i bcast = {1, 1, 3};
-    // Tensor3f ab = alpha.broadcast(bcast);
-
-    // Tensor3f comb = ab * origin_tensor + (1 - ab) * bgTensor;
-    // Eigen::Tensor<cv::uint8_t, 3, Eigen::RowMajor> results = comb.cast<cv::uint8_t>();
-
-    // cv::Mat matted;
-    // cv::eigen2cv(results, matted);
-
-    // cv::imwrite("/home/david/Desktop/res.jpg", matted);
+    do_inference(grpc_client,
+                 model_info,
+                 inputs,
+                 outputs,
+                 options,
+                 header,
+                 result,
+                 origin_mat,
+                 bg,
+                 output_mat,
+                 verbose);
 }
 
-int main(int argc, char **argv)
+int camera_seg(char **argv)
 {
-    size_t batch_size = std::stoi(argv[5]);
+    size_t batch_size = std::stoi(argv[4]);
 
     bool verbose = false;
     if (std::string(argv[2]).compare("verbose") == 0)
@@ -726,12 +754,74 @@ int main(int argc, char **argv)
     std::vector<int64_t> shape;
     model_shape(model_info, batch_size, shape);
 
-    Mat origin_image = cv::imread(argv[3]);
-    Mat bg = cv::imread(argv[4]);
+    // camera seg
+    cv::Mat bg = cv::imread(argv[3]);
+    VideoCapture cap(0);
 
-    // cv::resize(bg, bg, cv::Size(origin_image.cols, origin_image.rows));
-    // cv::imwrite(argv[6], bg);
+    if (cap.isOpened() == false)
+    {
+        std::cout << "Cannot open the video camera" << std::endl;
+        std::cin.get();
+        return EXIT_FAILURE;
+    }
 
-    auto bg_tensor = GenerateBg(bg, cv::Size(origin_image.cols, origin_image.rows));
-    grpc_test(client, model_info, headers, batch_size, origin_image, bg_tensor, verbose);
+    auto dWidth = cap.get(CAP_PROP_FRAME_WIDTH);
+    auto dHeight = cap.get(CAP_PROP_FRAME_HEIGHT);
+
+    int fontWeight = 2;
+    int fontSize = 1;
+    Scalar fontColor(255, 255, 255);
+    cv::Point textPosition{20, 30};
+
+    cv::Size frame_size{static_cast<int>(dWidth), static_cast<int>(dHeight)};
+    std::cout << "width: " << frame_size.width << " height: " << frame_size.height << std::endl;
+
+    Tensor3f bg_tensor = HumanSegmentaion::GenerateBg(bg, frame_size);
+
+    std::string window_name = "My Camera Feed";
+    namedWindow(window_name);
+
+    while (true)
+    {
+        Mat frame;
+        Mat output;
+        bool bSuccess = cap.read(frame);
+
+        if (bSuccess == false)
+        {
+            std::cout << "Video camera is disconnected" << std::endl;
+            std::cin.get();
+            break;
+        }
+
+        auto start = std::chrono::steady_clock::now();
+
+        grpc_test(client, model_info, headers, batch_size, frame, bg_tensor, output, verbose);
+
+        auto end = std::chrono::steady_clock::now();
+        double dr_s = std::chrono::duration<double, std::milli>(end - start).count();
+
+        auto fps = 1000 / dr_s;
+        std::string text = "FPS(";
+        text.append("GRPC): ")
+            .append(std::to_string(fps));
+        std::cout << text << std::endl;
+
+        putText(output, text, textPosition, FONT_HERSHEY_COMPLEX, fontSize, fontColor, fontWeight);
+        imshow(window_name, output);
+        
+        if (waitKey(10) == 27)
+        {
+            std::cout << "Esc key is pressed by user. Stoppig the video" << std::endl;
+            break;
+        }
+    }
+
+    cap.release();
+    return 0;
+}
+
+int main(int argc, char **argv)
+{
+    camera_seg(argv);
 }
