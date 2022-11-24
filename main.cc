@@ -120,8 +120,6 @@ int matting(char **argv)
 
 bool ParseType(const std::string &dtype, int *type1, int *type3)
 {
-    std::cout << "input dtype " << dtype << std::endl;
-
     if (dtype.compare("UINT8") == 0)
     {
         *type1 = CV_8UC1;
@@ -265,8 +263,6 @@ void ParseModelGrpc(const inference::ModelMetadataResponse &model_metadata,
     }
     else
     {
-        std::cout << "input format is FORMAT_NCHW" << std::endl;
-
         model_info->input_format_ = "FORMAT_NCHW";
         model_info->input_c_ = input_metadata.shape(input_batch_dim ? 1 : 0);
         model_info->input_h_ = input_metadata.shape(input_batch_dim ? 2 : 1);
@@ -306,9 +302,6 @@ void Preprocess(const cv::Mat &img,
     // most likely ordering and so change the channels to that ordering.
 
     cv::Mat sample;
-
-    std::cout << "Origin image channels " << img.channels() << std::endl;
-
     if ((img.channels() == 3) && (img_channels == 1))
     {
         cv::cvtColor(img, sample, GET_TRANSFORMATION_CODE(BGR2GRAY));
@@ -319,7 +312,6 @@ void Preprocess(const cv::Mat &img,
     }
     else if ((img.channels() == 3) && (img_channels == 3))
     {
-        std::cout << "convert BGR2RGB" << std::endl;
         cv::cvtColor(img, sample, GET_TRANSFORMATION_CODE(BGR2RGB));
     }
     else if ((img.channels() == 4) && (img_channels == 3))
@@ -347,8 +339,6 @@ void Preprocess(const cv::Mat &img,
     {
         sample_resized = sample;
     }
-
-    std::cout << "sample_resized's size: " << sample_resized.cols << "x" << sample_resized.rows << std::endl;
 
     cv::Mat sample_type;
     sample_resized.convertTo(
@@ -568,45 +558,9 @@ void do_inference(GRPC_CLIENT &grpc_client,
                   << std::endl;
         exit(1);
     }
-    std::string datatype;
-    err = result->Datatype(model_info.output_name_, &datatype);
-    if (!err.IsOk())
-    {
-        std::cerr << "unable to get datatype for " << model_info.output_name_ << std::endl;
-        exit(1);
-    }
-
-    if (datatype.compare("FP32") != 0)
-    {
-        std::cerr << "received incorrect datatype for " << model_info.output_name_ << ": "
-                  << datatype << std::endl;
-        exit(1);
-    }
-
-    std::vector<int64_t> shape;
-    err = result->Shape(model_info.output_name_, &shape);
-    if (!err.IsOk())
-    {
-        std::cerr << "unable to get shape for " << model_info.output_name_ << std::endl;
-        exit(1);
-    }
-
-    // std::cout << "result shape size " << shape.size() << std::endl;
-    // std::cout << "result shape 1 is " << shape.at(0) << "\n"
-    //           << "result shape 2 is " << shape.at(1) << "\n"
-    //           << "result shape 3 is " << shape.at(2) << "\n"
-    //           << "result shape 3 is " << shape.at(3) << std::endl;
-
-    std::string model_name;
-    err = result->ModelName(&model_name);
-    if (!err.IsOk())
-    {
-        std::cout << "get model_name error " << err.Message() << std::endl;
-    }
-
-    std::cout << "model_name is " << model_name << std::endl;
+    
+    start = std::chrono::steady_clock::now();
     size_t buf_size;
-    ;
     const uint8_t *buffer;
     std::array<float, HumanSegModelInfo::SHAPE> scroe_map{};
     err = result->RawData(model_info.output_name_, &buffer, &buf_size);
@@ -615,15 +569,9 @@ void do_inference(GRPC_CLIENT &grpc_client,
         std::cout << "get rawData error " << err.Message() << std::endl;
     }
 
-    std::cout << "get buf size is " << buf_size << std::endl;
     auto casted = (float *)(buffer);
-
     std::copy(casted + HumanSegModelInfo::SHAPE, casted + HumanSegModelInfo::OUTPUT_TENSOR_SIZE + 1, scroe_map.data());
-    std::cout << "score_map data size " << scroe_map.size() << std::endl;
-    std::cout << "score_map data[89151] " << scroe_map[89151] << std::endl;
-
     Eigen::TensorMap<Tensor3f> score_tensor{scroe_map.data(), 1, 224, 398};
-    std::cout << "score_tensor[111]" << score_tensor(0, 0, 34) << std::endl;
 
     Tensor3f origin_tensor(origin_mat.cols, origin_mat.rows, 3);
     cv::cv2eigen(origin_mat, origin_tensor);
@@ -667,6 +615,9 @@ void do_inference(GRPC_CLIENT &grpc_client,
     std::cout << model_stat.DebugString() << std::endl;
 #endif
     cv::eigen2cv(results, output_mat);
+    end = std::chrono::steady_clock::now();
+    dr_s = std::chrono::duration<double, std::milli>(end - start).count();
+    std::cout << "postprocess time: " << dr_s << "ms" << std::endl;
 }
 
 void grpc_test(GRPC_CLIENT &grpc_client,
@@ -823,5 +774,6 @@ int camera_seg(char **argv)
 
 int main(int argc, char **argv)
 {
-    camera_seg(argv);
+    // camera_seg(argv);
+    matting(argv);
 }
