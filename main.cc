@@ -774,6 +774,6 @@ int camera_seg(char **argv)
 
 int main(int argc, char **argv)
 {
-    // camera_seg(argv);
-    matting(argv);
+    camera_seg(argv);
+    // matting(argv);
 }
